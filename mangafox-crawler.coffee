@@ -5,7 +5,7 @@ $ = require 'jquery'
 _ = require 'underscore'
 
 console.log 'started'
-crawlQueue = ['http://www.mangafox.com/manga/shiki/v11/c041/']
+crawlQueue = ['http://www.mangafox.com/manga/my_little_sister_can_t_be_this_cute/v04/c026/']
 downloadQueue = []
 	
 download = () ->
@@ -55,14 +55,8 @@ download = () ->
 		response.on 'end', () ->
 			console.log 'downloaded: ' + filename
 			file.end()
+			file.destroySoon()
 			
-			#clean up
-			file = null
-			request = null
-			response = null
-			options = null
-			filename = null
-	
 	request.end()
 	
 scrape = () ->
@@ -75,8 +69,7 @@ scrape = () ->
 		"host": host.hostname,
 		"port": 80,
 		"path": host.pathname,
-		"method": 'GET',
-		"url": hostUrl
+		"method": 'GET'
 	}
 	
 	host = null
@@ -98,33 +91,27 @@ scrape = () ->
 				return
 			
 			imageUrl = $image.attr('src')
-			downloadQueue.push {"pageUrl": options.url, "imageUrl": imageUrl}
+			downloadQueue.push {"pageUrl": hostUrl, "imageUrl": imageUrl}
 			
 			href = $image.parent('a').attr('href')
+			
+			if !href
+				quit()
+				return
 			
 			#last page of chapter
 			if href is 'javascript:void(0);'
 				href = $html.find('span:contains("Next Chapter:") + a').attr('href')
 			
-			nextUrl = url.resolve options.url, href
+			nextUrl = url.resolve hostUrl, href
 			
 			crawlQueue.push nextUrl
-			
-			#clean up
-			html = null
-			$html = null
-			$image = null
-			request = null
-			response = null
-			options = null
-			href = null
-			nextUrl = null
 		
 	request.end()
 	
 quit = () ->
 	setInterval (() ->
-		console.log 'waiting to finish with ' + downloadCallCount + ' calls remaining'
+		console.log 'waiting to finish'
 		if crawlQueue.length is 0 and downloadQueue.length is 0
 			console.log 'finished'
 			process.exit(0)
