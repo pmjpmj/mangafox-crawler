@@ -4,26 +4,36 @@ fs = require 'fs'
 $ = require 'jquery'
 _ = require 'underscore'
 
-console.log 'start'
-downloadCallCount = 0
+console.log 'started'
+crawlQueue = ['http://www.mangafox.com/manga/shiki/v11/c041/']
+downloadQueue = []
 	
-download = (pageUrl, imageUrl) ->
+download = () ->
+	return if downloadQueue.length is 0
+	
+	downloadInfo = downloadQueue.pop()
+	
+	pageUrl = downloadInfo.pageUrl
+	imageUrl = downloadInfo.imageUrl
+	
 	pathArray = _.rest(pageUrl.split('/'), 4)
-	directory = url.resolve(pathArray.join('/'), '.') + "/"
+	directory = url.resolve(pathArray.join('/'), './')
+	pathArray = directory.split('/')
 	filename = directory + _.last(imageUrl.split('/'))
-	console.log 'image: ' + imageUrl + ' filename: ' + filename
+	console.log 'page: ' + pageUrl + ' image: ' + imageUrl + ' filename: ' + filename
 	
 	currentDir = ''
 	for path in pathArray
+		if path is ''
+			break
+		
 		currentDir += (path + '/')
-		console.log currentDir
 		try
 			fs.mkdirSync(currentDir)
 		catch error
-			console.log error
 			#do nothing
-		
-	file = fs.createWriteStream (filename), {"flags":'w'}
+	
+	currentDir = null
 	
 	parsedUrl = url.parse imageUrl
 	options = {
@@ -32,6 +42,12 @@ download = (pageUrl, imageUrl) ->
 		"path": parsedUrl.pathname
 	}
 	
+	#clean up
+	parsedUrl = null
+	pathArray = null
+	directory = null
+	
+	file = fs.createWriteStream (filename), {"flags":'w'}
 	request = http.get options, (response) -> 
 		response.on 'data', (chunk) ->
 			file.write chunk
@@ -39,15 +55,21 @@ download = (pageUrl, imageUrl) ->
 		response.on 'end', () ->
 			console.log 'downloaded: ' + filename
 			file.end()
-			downloadCallCount--
+			
+			#clean up
+			file = null
+			request = null
+			response = null
+			options = null
+			filename = null
 	
-	downloadCallCount++
 	request.end()
 	
-scrape = (hostUrl) ->
+scrape = () ->
+	return if crawlQueue.length is 0
 	
+	hostUrl = crawlQueue.pop()
 	host = url.parse hostUrl
-	nextUrl = host.pathname
 	
 	options = {
 		"host": host.hostname,
@@ -56,6 +78,8 @@ scrape = (hostUrl) ->
 		"method": 'GET',
 		"url": hostUrl
 	}
+	
+	host = null
 	
 	request = http.request options, (response) ->
 		html = ''
@@ -66,36 +90,46 @@ scrape = (hostUrl) ->
 	
 		response.on 'end', () ->
 			$html = $(html)
-			image = $html.find '#image'
+			$image = $html.find '#image'
 			
 			#page after final chapter
-			if image.length is 0
+			if $image.length is 0
 				quit()
 				return
 			
-			imageUrl = image.attr('src')
-			download(options.url, imageUrl)
+			imageUrl = $image.attr('src')
+			downloadQueue.push {"pageUrl": options.url, "imageUrl": imageUrl}
 			
-			href = image.parent('a').attr('href')
+			href = $image.parent('a').attr('href')
 			
 			#last page of chapter
 			if href is 'javascript:void(0);'
 				href = $html.find('span:contains("Next Chapter:") + a').attr('href')
 			
-			nextUrl = url.resolve options.url, href		
-			console.log 'next url: ' + nextUrl
+			nextUrl = url.resolve options.url, href
 			
-			#get next page - avoid stack overflow
-			process.nextTick () -> scrape(nextUrl)
+			crawlQueue.push nextUrl
+			
+			#clean up
+			html = null
+			$html = null
+			$image = null
+			request = null
+			response = null
+			options = null
+			href = null
+			nextUrl = null
 		
 	request.end()
 	
 quit = () ->
 	setInterval (() ->
 		console.log 'waiting to finish with ' + downloadCallCount + ' calls remaining'
-		if downloadCallCount is 0
+		if crawlQueue.length is 0 and downloadQueue.length is 0
 			console.log 'finished'
 			process.exit(0)
 	), 1000
 
-scrape('http://www.mangafox.com/manga/maken_ki/v01/c001/')
+
+setInterval scrape, 50 
+setInterval download, 50
