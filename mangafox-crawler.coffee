@@ -3,11 +3,25 @@ http = require 'http'
 fs = require 'fs'
 $ = require 'jquery'
 _ = require 'underscore'
+commander = require 'commander'
+mkdirp = require 'mkdirp'
+
+commander
+	.version('0.0.1')
+	.usage('[options] <url>')
+	.option('-t, --target <path>', 'target path')
+	.option('-n, --startno <no>', 'image file start number')
+	.parse(process.argv)
+
+if commander.args.length is 0
+	console.log 'url must be provided'
+	process.exit(1)
 
 console.log 'started'
-crawlQueue = ['http://www.mangafox.com/manga/my_little_sister_can_t_be_this_cute/v04/c026/']
+crawlQueue = [commander.args[0]]
 downloadQueue = []
-	
+counter = if commander.startno then commander.startno else 1
+
 download = () ->
 	return if downloadQueue.length is 0
 	
@@ -16,36 +30,25 @@ download = () ->
 	pageUrl = downloadInfo.pageUrl
 	imageUrl = downloadInfo.imageUrl
 	
-	pathArray = _.rest(pageUrl.split('/'), 4)
-	directory = url.resolve(pathArray.join('/'), './')
-	pathArray = directory.split('/')
-	filename = directory + _.last(imageUrl.split('/'))
+	directory = _.first(_.rest(pageUrl.split('/'), 4))
+
+	if commander.target
+		if commander.target.indexOf('/') is -1
+			directory = '/' + directory
+		
+		directory = commander.target + directory
+		
+	filename = directory + '/' + (counter++) + '.' + _.last(imageUrl.split('.'))
+	
 	console.log 'page: ' + pageUrl + ' image: ' + imageUrl + ' filename: ' + filename
 	
-	currentDir = ''
-	for path in pathArray
-		if path is ''
-			break
-		
-		currentDir += (path + '/')
-		try
-			fs.mkdirSync(currentDir)
-		catch error
-			#do nothing
-	
-	currentDir = null
+	mkdirp.sync directory, 0755
 	
 	parsedUrl = url.parse imageUrl
-	options = {
-		"host": parsedUrl.hostname,
-		"port": 80,
-		"path": parsedUrl.pathname
-	}
-	
-	#clean up
-	parsedUrl = null
-	pathArray = null
-	directory = null
+	options =
+		host: parsedUrl.hostname
+		port: 80
+		path: parsedUrl.pathname
 	
 	file = fs.createWriteStream (filename), {"flags":'w'}
 	request = http.get options, (response) -> 
@@ -65,12 +68,11 @@ scrape = () ->
 	hostUrl = crawlQueue.pop()
 	host = url.parse hostUrl
 	
-	options = {
-		"host": host.hostname,
-		"port": 80,
-		"path": host.pathname,
-		"method": 'GET'
-	}
+	options =
+		host: host.hostname
+		port: 80
+		path: host.pathname
+		method: 'GET'
 	
 	host = null
 	
