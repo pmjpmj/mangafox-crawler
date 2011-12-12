@@ -70,13 +70,16 @@ scrape = (pageUrl, counter, target) ->
 			#last page of chapter
 			if href is 'javascript:void(0);'
 				href = $(body).find('span:contains("Next Chapter:") + a').attr('href')
+				
+			if !href
+				quit()
+				return
 			
 			nextUrl = url.resolve pageUrl, href
-			counter++
+			nextCounter = counter + 1
 			
-			child = cp.fork(__dirname + '/scraper.js')
-			child.send {url: nextUrl, counter: counter, target: target}
-			
+			#send next item to parent process
+			process.send {url: nextUrl, counter: nextCounter, target: target}
 			quit()
 
 process.on 'message', (message) ->

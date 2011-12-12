@@ -27,9 +27,15 @@ if target
 	
 mkdirp.sync directory, 0755
 
-child = cp.fork(__dirname + '/scraper.js')
-child.send {url: url, counter: counter, target: target}
+createWorker = (args) ->
+	child = cp.fork(__dirname + '/scraper.js')
+	child.on 'message', (message) ->
+		child = createWorker message
+		
+	child.send {url: args.url, counter: args.counter, target: args.target}
+	return child
+
+# send first url to child process
+createWorker {url: url, counter: counter, target: target}
 
 console.log 'started'
-
-	
