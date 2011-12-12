@@ -17,7 +17,7 @@ if commander.args.length is 0
 	console.log 'url must be provided'
 	process.exit(1)
 
-inProgress = 0
+inProgress = false
 counter = if commander.startno then commander.startno else 1
 
 padStr = (string, size, padding) ->
@@ -37,12 +37,12 @@ padStr = (string, size, padding) ->
 quit = () ->
 	setInterval (() ->
 		console.log 'waiting to finish'
-		if inProgress < 1
+		if not inProgress
 			console.log 'finished'
 			process.exit(0)
 	), 1000
 
-prepare = (pageUrl, imageUrl) ->	
+download = (pageUrl, imageUrl) ->	
 	directory = _.first(_.rest(pageUrl.split('/'), 4))
 	if commander.target
 		if commander.target.indexOf('/') is -1
@@ -56,6 +56,15 @@ prepare = (pageUrl, imageUrl) ->
 		pageUrl: pageUrl
 		imageUrl: imageUrl
 		filename: directory + '/' + padStr(8, counter.toString(), 0) + '.' + _.last(imageUrl.split('.'))
+			
+	process.nextTick () ->
+		inProgress = true
+		request(info.imageUrl).pipe(fs.createWriteStream(info.filename).on(
+			'close',
+			() ->
+				console.log info.pageUrl + ' downloaded as ' + info.filename
+				inProgress = false
+		))
 	
 	counter++
 	return info
@@ -63,24 +72,14 @@ prepare = (pageUrl, imageUrl) ->
 scrape = (pageUrl) ->
 	request pageUrl, (error, response, body) ->
 		if not error and response.statusCode is 200
-			$html = $(body)
-			$image = $html.find '#image'
+			$image = $(body).find('#image')
 			
 			#page after final chapter
 			if $image.length is 0
 				quit()
 				return
 			
-			info = prepare pageUrl, $image.attr('src')
-			
-			process.nextTick () ->
-				inProgress++
-				request(info.imageUrl).pipe(fs.createWriteStream(info.filename).on(
-					'close',
-					() ->
-						--inProgress
-						console.log info.pageUrl + ' downloaded as ' + info.filename
-				))
+			process.nextTick () -> download pageUrl, $image.attr('src')
 				
 			href = $image.parent('a').attr('href')
 			
@@ -90,12 +89,14 @@ scrape = (pageUrl) ->
 			
 			#last page of chapter
 			if href is 'javascript:void(0);'
-				href = $html.find('span:contains("Next Chapter:") + a').attr('href')
+				href = $(body).find('span:contains("Next Chapter:") + a').attr('href')
 			
 			nextUrl = url.resolve pageUrl, href
 			
-			process.nextTick () ->
-				scrape nextUrl
-
-console.log 'started'
+			process.nextTick () -> scrape nextUrl
+			
+#started
 scrape commander.args[0]
+
+
+	
