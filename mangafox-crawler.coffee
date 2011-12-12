@@ -1,10 +1,7 @@
-url = require 'url'
-fs = require 'fs'
-$ = require 'jquery'
-_ = require 'underscore'
 commander = require 'commander'
+cp = require 'child_process'
+_ = require 'underscore'
 mkdirp = require 'mkdirp'
-request = require 'request'
 
 commander
 	.version('0.0.1')
@@ -17,90 +14,28 @@ if commander.args.length is 0
 	console.log 'url must be provided'
 	process.exit(1)
 
-inProgress = false
+url = commander.args[0]
 counter = if commander.startno then commander.startno else 1
+target = commander.target
 
-padStr = (string, size, padding) ->
-    if typeof string is 'number'
-        _size = size
-        size = string
-        string = _size
-    string = string.toString()
-    pad = ''
-    size = size - string.length
-    for i in [0 ... size]
-        pad += padding
-    if _size
-    then pad + string
-    else string + pad
+directory = _.first(_.rest(url.split('/'), 4))
+if target
+	if target.indexOf('/') is -1
+		directory = '/' + directory
+	
+	directory = target + directory
+	
+mkdirp.sync directory, 0755
 
-quit = () ->
-	setInterval (() ->
-		console.log 'waiting to finish'
-		if not inProgress
-			console.log 'finished'
-			process.exit(0)
-	), 1000
-
-download = (pageUrl, imageUrl) ->	
-	directory = _.first(_.rest(pageUrl.split('/'), 4))
-	if commander.target
-		if commander.target.indexOf('/') is -1
-			directory = '/' + directory
+createWorker = (args) ->
+	child = cp.fork(__dirname + '/scraper.js')
+	child.on 'message', (message) ->
+		child = createWorker message
 		
-		directory = commander.target + directory
-		
-	mkdirp.sync directory, 0755
-	
-	info =
-		pageUrl: pageUrl
-		imageUrl: imageUrl
-		filename: directory + '/' + padStr(8, counter.toString(), 0) + '.' + _.last(imageUrl.split('.'))
-			
-	process.nextTick () ->
-		inProgress = true
-		request(info.imageUrl).pipe(fs.createWriteStream(info.filename).on(
-			'close',
-			() ->
-				console.log info.pageUrl + ' downloaded as ' + info.filename
-				inProgress = false
-		))
-	
-	counter++
-	return info
+	child.send {url: args.url, counter: args.counter, target: args.target}
+	return child
 
-scrape = (pageUrl) ->
-	request pageUrl, (error, response, body) ->
-		if not error and response.statusCode is 200
-			$image = $(body).find('#image')
-			
-			#page after final chapter
-			if $image.length is 0
-				quit()
-				return
-			
-			process.nextTick () -> download pageUrl, $image.attr('src')
-				
-			href = $image.parent('a').attr('href')
-			
-			if !href
-				quit()
-				return
-			
-			#last page of chapter
-			if href is 'javascript:void(0);'
-				href = $(body).find('span:contains("Next Chapter:") + a').attr('href')
-				
-			if !href
-				quit()
-				return
-			
-			nextUrl = url.resolve pageUrl, href
-			
-			process.nextTick () -> scrape nextUrl
-			
-#started
-scrape commander.args[0]
+# send first url to child process
+createWorker {url: url, counter: counter, target: target}
 
-
-	
+console.log 'started'
