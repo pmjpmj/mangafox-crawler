@@ -2,8 +2,10 @@ url = require 'url'
 fs = require 'fs'
 $ = require 'jquery'
 _ = require 'underscore'
-mkdirp = require 'mkdirp'
 request = require 'request'
+cp = require 'child_process'
+
+inProgress = false
 
 padStr = (string, size, padding) ->
     if typeof string is 'number'
@@ -18,16 +20,21 @@ padStr = (string, size, padding) ->
     if _size
     then pad + string
     else string + pad
+    
+quit = () ->
+	setInterval (() ->
+		if not inProgress
+			process.exit(0)
+		), 1000
 
 download = (pageUrl, imageUrl, counter, target) ->	
+	inProgress = true
 	directory = _.first(_.rest(pageUrl.split('/'), 4))
 	if target
 		if target.indexOf('/') is -1
 			directory = '/' + directory
 		
 		directory = target + directory
-		
-	mkdirp.sync directory, 0755
 	
 	info =
 		pageUrl: pageUrl
@@ -35,7 +42,6 @@ download = (pageUrl, imageUrl, counter, target) ->
 		filename: directory + '/' + padStr(8, counter.toString(), 0) + '.' + _.last(imageUrl.split('.'))
 			
 	process.nextTick () ->
-		inProgress = true
 		request(info.imageUrl).pipe(fs.createWriteStream(info.filename).on(
 			'close',
 			() ->
@@ -50,6 +56,7 @@ scrape = (pageUrl, counter, target) ->
 			
 			#page after final chapter
 			if $image.length is 0
+				quit()
 				return
 			
 			process.nextTick () -> download pageUrl, $image.attr('src'), counter, target
@@ -57,6 +64,7 @@ scrape = (pageUrl, counter, target) ->
 			href = $image.parent('a').attr('href')
 			
 			if !href
+				quit()
 				return
 			
 			#last page of chapter
@@ -65,7 +73,11 @@ scrape = (pageUrl, counter, target) ->
 			
 			nextUrl = url.resolve pageUrl, href
 			counter++
-			process.send({url: nextUrl, counter: counter})
+			
+			child = cp.fork(__dirname + '/scraper.js')
+			child.send {url: nextUrl, counter: counter, target: target}
+			
+			quit()
 
 process.on 'message', (message) ->
 	scrape message.url, message.counter, message.target
