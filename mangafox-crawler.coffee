@@ -90,6 +90,10 @@ scrape = (pageUrl) ->
 			#last page of chapter
 			if href is 'javascript:void(0);'
 				href = $(body).find('span:contains("Next Chapter:") + a').attr('href')
+				
+			if !href
+				quit()
+				return
 			
 			nextUrl = url.resolve pageUrl, href
 			
