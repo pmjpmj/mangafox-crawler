@@ -8,7 +8,7 @@ mangafox-crawler.coffee: node_modules scraper.coffee
 scraper.coffee: node_modules
 	./node_modules/coffee-script/bin/coffee -o $(TARGET) -c scraper.coffee
 
-node_modules: target
+node_modules:
 	npm install jquery
 	npm install underscore
 	npm install mkdirp
