@@ -2,7 +2,7 @@
 
 given url, downloads manga image files automatically
 
-requires node v0.6
+requires node v0.6 and npm
 
 ## how to build
 
