@@ -13,6 +13,10 @@ node_modules: clean
 	npm install underscore
 	npm install mkdirp
 	npm install coffee-script
+	npm install commander
+	npm install request
+	mkdir $(TARGET)
+	cp -R node_modules $(TARGET)/node_modules
 
 clean:
 	rm -rf $(TARGET)

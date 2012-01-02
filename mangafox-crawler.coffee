@@ -15,7 +15,7 @@ if commander.args.length is 0
 	process.exit(1)
 
 url = commander.args[0]
-counter = if commander.startno then commander.startno else 1
+counter = if commander.startno then (Number) commander.startno else 1
 target = commander.target
 
 directory = _.first(_.rest(url.split('/'), 4))
