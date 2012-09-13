@@ -25,7 +25,7 @@ if target
 	
 	directory = target + directory
 	
-mkdirp.sync directory, 0755
+mkdirp.sync directory, 0o0755
 
 createWorker = (args) ->
 	child = cp.fork(__dirname + '/scraper.js')
